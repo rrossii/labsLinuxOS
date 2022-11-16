@@ -115,8 +115,8 @@ void deleteUnnecessarySymbols(string &text) {
 }
 
 void RunNThreads(size_t numberOfThreads) {
-//    string inputFile = "/home/rosska/CLionProjects/labsLinuxOS/text1.txt";
-    string inputFile = "/home/rosska/CLionProjects/labsLinuxOS/text2.txt";
+    string inputFile = "/home/rosska/CLionProjects/labsLinuxOS/text1.txt";
+//    string inputFile = "/home/rosska/CLionProjects/labsLinuxOS/text2.txt";
     string text = readTextFromFile(inputFile);
 
     deleteUnnecessarySymbols(text);
@@ -124,7 +124,7 @@ void RunNThreads(size_t numberOfThreads) {
 
     auto startTime = CurrentTimeMillis();
 
-    runCalculatingThreads(chunksOfSentences, 0);
+    runCalculatingThreads(chunksOfSentences, -20);
 
     auto endTime = CurrentTimeMillis();
 
@@ -185,29 +185,15 @@ void findLongestSentence(const string &text) {
     sentencesFoundByThreads.push_back(longest);
 }
 
-class Thread : public std::thread
-{
-public:
-    void setScheduling(std::thread &th, int policy, int priority) {
-        sch_params.sched_priority = priority;
-        if (pthread_setschedparam(th.native_handle(), policy, &sch_params)) {
-            std::cerr << "Failed to set Thread scheduling : " << std::strerror(errno) << std::endl;
-        }
-    }
-private:
-    sched_param sch_params;
-};
 
 void runCalculatingThreads(vector<string> &chunksOfSentences, int priority) {
     size_t numberOfChunks = chunksOfSentences.size();
 
     vector<thread> longestSentence;
     for (size_t i = 0; i < numberOfChunks; i++) {
-
-        // TODO: run thread with findLongestSentence and set priority to thread
         longestSentence.emplace_back(findLongestSentence, chunksOfSentences[i]);
-        Thread th;
-        th.setScheduling(longestSentence[i], SCHED_OTHER, priority);
+         // doesnt work
+        // pthread_setschedprio(longestSentence[i].native_handle(), priority);
     }
 
     for (size_t i = 0; i < numberOfChunks; i++) {
