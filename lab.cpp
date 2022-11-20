@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <cassert>
 #include <thread>
+#include <mutex>
+#include <semaphore.h>
 #include <pthread.h>
 #include <cstring>
 
@@ -15,17 +17,24 @@ typedef long long ll;
 
 string readTextFromFile(const string &fileName);
 void saveResToFile(const string &fileName, const string &text, ll exeTime, size_t numberOfThreads);
-void saveResLimitToFile(const string &fileName, const string &text, ll exeTime, size_t numberOfThreads, size_t limitedThreads);
-void findLongestSentence(const string &text);
+void saveResLimitToFile(const string &fileName, const string &text, ll exeTime, size_t
+numberOfThreads, size_t limitedThreads);
+void findLongestSentence(const string &text, bool limit);
 vector<string> divideTextIntoChunksOfSentences(const string &text, size_t parts);
-void runCalculatingThreads(vector<string> &chunksOfSentences, int priority);
+void runCalculatingThreads(vector<string> &chunksOfSentences, int priority, bool limit);
 size_t CountWords(const string &sentence);
 void RunNThreads(size_t numberOfThreads);
 void deleteUnnecessarySymbols(string &text);
 string LongestSentenceInVector(const vector<string> &sentences);
+int progressUpdateInPercents(size_t nowSizeOfVectorSentences, size_t
+finalSizeOfVectorSentences);
 void limitThreads(size_t numOfThreads, vector<string> &chunksOfSentences);
 
 vector<string> sentencesFoundByThreads;
+
+mutex progressUpdateMutex;
+mutex sentencesFoundByThreadsMutex;
+sem_t limitThreadSemaphore;
 
 uint64_t CurrentTimeMillis() {
     uint64_t ms = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
@@ -33,13 +42,10 @@ uint64_t CurrentTimeMillis() {
 }
 
 int main() {
-        RunNThreads(1);
-        RunNThreads(2);
-        RunNThreads(4);
-    //    RunNThreads(8);
-    //    RunNThreads(20);
-    //    RunNThreads(100);
-    //    RunNThreads(1000);
+    RunNThreads(1);
+    RunNThreads(2);
+    RunNThreads(4);
+    RunNThreads(8);
     return 0;
 }
 
@@ -114,6 +120,18 @@ void deleteUnnecessarySymbols(string &text) {
     text.erase(iter, text.end() );
 }
 
+int progressUpdateInPercents(size_t nowSizeOfVectorSentences, size_t finalSizeOfVectorSentences) {
+    return (nowSizeOfVectorSentences * 100) / finalSizeOfVectorSentences;
+}
+
+void limitThreads(size_t numOfThreads, vector<string> &chunksOfSentences) {
+    sem_init(&limitThreadSemaphore, 0, numOfThreads);
+
+    runCalculatingThreads(chunksOfSentences, 0, true);
+
+    sem_destroy(&limitThreadSemaphore);
+}
+
 void RunNThreads(size_t numberOfThreads) {
     string inputFile = "/home/rosska/CLionProjects/labsLinuxOS/text1.txt";
 //    string inputFile = "/home/rosska/CLionProjects/labsLinuxOS/text2.txt";
@@ -124,7 +142,7 @@ void RunNThreads(size_t numberOfThreads) {
 
     auto startTime = CurrentTimeMillis();
 
-    runCalculatingThreads(chunksOfSentences, -20);
+    runCalculatingThreads(chunksOfSentences, -20, false);
 
     auto endTime = CurrentTimeMillis();
 
@@ -133,6 +151,20 @@ void RunNThreads(size_t numberOfThreads) {
 
     string outputFile = "/home/rosska/CLionProjects/labsLinuxOS/output.txt";
     saveResToFile(outputFile, longest, endTime - startTime, numberOfThreads);
+    sentencesFoundByThreads.clear();
+
+// ===========================================
+
+    startTime = CurrentTimeMillis();
+
+    size_t limitedNumOfThread = 2;
+    limitThreads(limitedNumOfThread, chunksOfSentences);
+
+    endTime = CurrentTimeMillis();
+
+    longest = LongestSentenceInVector(sentencesFoundByThreads);
+    saveResLimitToFile(outputFile, longest, endTime - startTime, numberOfThreads,limitedNumOfThread);
+
     sentencesFoundByThreads.clear();
 }
 
@@ -179,26 +211,62 @@ size_t CountWords(const string &sentence) {
     return countWords;
 }
 
-void findLongestSentence(const string &text) {
-    string longest = FindLongestSentenceInText(text); // the longest sentence in chunk
+void findLongestSentence(const string &text, bool limit) {
+    if (limit) {
+        sem_wait(&limitThreadSemaphore);
+    }
 
+    string longest = FindLongestSentenceInText(text);
+
+    if (limit) {
+        sem_post(&limitThreadSemaphore);
+    }
+
+    sentencesFoundByThreadsMutex.lock();
     sentencesFoundByThreads.push_back(longest);
+    sentencesFoundByThreadsMutex.unlock();
 }
 
-
-void runCalculatingThreads(vector<string> &chunksOfSentences, int priority) {
+void runCalculatingThreads(vector<string> &chunksOfSentences, int priority, bool limit) {
     size_t numberOfChunks = chunksOfSentences.size();
 
     vector<thread> longestSentence;
     for (size_t i = 0; i < numberOfChunks; i++) {
-        longestSentence.emplace_back(findLongestSentence, chunksOfSentences[i]);
-         // doesnt work
-        // pthread_setschedprio(longestSentence[i].native_handle(), priority);
+        longestSentence.emplace_back(findLongestSentence, chunksOfSentences[i], limit);
+
+        pthread_setschedprio(longestSentence[i].native_handle(), priority);
     }
 
     for (size_t i = 0; i < numberOfChunks; i++) {
-        longestSentence[i].join();
+        longestSentence[i].detach();
     }
+
+    //sem_post(&limitThreadSemaphore);
+    bool threadsWorkFinished;
+    do {
+        progressUpdateMutex.lock();
+        cout << "progress: " << progressUpdateInPercents(sentencesFoundByThreads.size(),
+                                                         chunksOfSentences.size()) << "%\n";
+
+        auto comparator = [](const string &current, const string &next) {
+            //return current.size() > next.size();
+            return CountWords(current) < CountWords(next);
+        };
+
+        if (!sentencesFoundByThreads.empty()) {
+            string currentLongestSentence = *max_element(sentencesFoundByThreads.begin(),
+                                                         sentencesFoundByThreads.end(),
+                                                         comparator);
+            cout << "The longest sentence by now: " << currentLongestSentence << "\n\n";
+        }
+
+        threadsWorkFinished = sentencesFoundByThreads.size() >=
+                              chunksOfSentences.size();
+
+        progressUpdateMutex.unlock();
+        this_thread::sleep_for(std::chrono::milliseconds(1000));
+    } while (!threadsWorkFinished);
+
     cout << '\n';
 }
 
@@ -223,6 +291,16 @@ void saveResToFile(const string &fileName, const string &text, ll exeTime, size_
 
     output << "Longest sentence size = [" << CountWords(text) << "]\nSentence = [" << text << "]\n";
     output << "Executing time for [" <<  numberOfThreads << "] threads is [" << exeTime << "]ms\n\n";
+
+    output.close();
+}
+
+void saveResLimitToFile(const string &fileName, const string &text, ll exeTime, size_t numberOfThreads, size_t limitedThreads) {
+    fstream output;
+
+    output.open(fileName, std::ios_base::app);
+    output << "Longest sentence size = [" << CountWords(text) << "]\nSentence = [" << text << "]\n";
+    output << "Executing time for [" << numberOfThreads << "] threads where " << " was executing [" << limitedThreads << "] threads is [" << exeTime << "]ms\n\n";
 
     output.close();
 }
