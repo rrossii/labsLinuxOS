@@ -1,3 +1,4 @@
+#include <my_library/lab.h>
 #include <iostream>
 #include <vector>
 #include <chrono>
@@ -15,20 +16,7 @@ using namespace std;
 
 typedef long long ll;
 
-string readTextFromFile(const string &fileName);
-void saveResToFile(const string &fileName, const string &text, ll exeTime, size_t numberOfThreads);
-void saveResLimitToFile(const string &fileName, const string &text, ll exeTime, size_t
-numberOfThreads, size_t limitedThreads);
-void findLongestSentence(const string &text, bool limit);
-vector<string> divideTextIntoChunksOfSentences(const string &text, size_t parts);
-void runCalculatingThreads(vector<string> &chunksOfSentences, int priority, bool limit);
-size_t CountWords(const string &sentence);
-void RunNThreads(size_t numberOfThreads);
-void deleteUnnecessarySymbols(string &text);
-string LongestSentenceInVector(const vector<string> &sentences);
-int progressUpdateInPercents(size_t nowSizeOfVectorSentences, size_t
-finalSizeOfVectorSentences);
-void limitThreads(size_t numOfThreads, vector<string> &chunksOfSentences);
+extern "C" __typeof(entry_function) entryPointForOSLabs __attribute((alias("entry_function")));
 
 vector<string> sentencesFoundByThreads;
 
@@ -41,7 +29,7 @@ uint64_t CurrentTimeMillis() {
     return ms;
 }
 
-int main() {
+extern "C" int entry_function() {
     RunNThreads(1);
     RunNThreads(2);
     RunNThreads(4);
@@ -157,7 +145,7 @@ void RunNThreads(size_t numberOfThreads) {
 
     startTime = CurrentTimeMillis();
 
-    size_t limitedNumOfThread = 2;
+    size_t limitedNumOfThread = 1;
     limitThreads(limitedNumOfThread, chunksOfSentences);
 
     endTime = CurrentTimeMillis();
