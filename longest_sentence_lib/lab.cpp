@@ -218,7 +218,8 @@ void findLongestSentence(const string &text, bool limit) {
 void runCalculatingThreads(vector<string> &chunksOfSentences, int priority, bool limit) {
     size_t numberOfChunks = chunksOfSentences.size();
 
-    vector<thread> longestSentence;
+    vector<thread> longestSentence(0);
+    longestSentence.reserve(numberOfChunks);
     for (size_t i = 0; i < numberOfChunks; i++) {
         longestSentence.emplace_back(findLongestSentence, chunksOfSentences[i], limit);
 

@@ -1,0 +1,8 @@
+Longest sentence size = [19]
+Sentence = [Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.]
+Executing time for [1] threads is [3039]ms
+
+Longest sentence size = [19]
+Sentence = [Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.]
+Executing time for [1] threads is [3039]ms
+
